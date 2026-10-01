@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+build/
+dist/
+*.spec
+*.db*
+*.sqlite*
+.env*
+dados/
+*.log
+*.zip
+*.xlsx
+!examples/*.xlsx
