@@ -1,0 +1,32 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const {parseHTML} = require('linkedom');
+const code = fs.readFileSync(path.join(__dirname,'../extension/extract.js'),'utf8');
+let count=0;
+function extract(filename, url='https://www.linkedin.com/company/ficticia/about/') {
+  const {document, window} = parseHTML(fs.readFileSync(path.join(__dirname,'fixtures',filename),'utf8'));
+  window.HTMLElement.prototype.getClientRects = function(){return this.hasAttribute('hidden') ? [] : [{}]};
+  const context={document, location:{href:url}, getComputedStyle:el=>({visibility:'visible',display:el.hasAttribute('hidden')?'none':'block'})};
+  vm.createContext(context); vm.runInContext(code,context);
+  return JSON.parse(JSON.stringify(context.extractCompany()));
+}
+const pt=extract('sobre_pt.html');
+assert.deepEqual(pt.fields,{name:'Aurora Fictícia',members:'1.234',industry:'Serviços de tecnologia',size:'51–200 funcionários'});count++;
+const en=extract('about_en.html');
+assert.deepEqual(en.fields,{name:'Fictional Cedar',members:'87',industry:'Manufacturing',size:'11–50 employees'});count++;
+const partial=extract('parcial.html');
+assert.equal(partial.fields.members,'');assert.equal(partial.fields.size,'201–500 funcionários');assert.equal(partial.fields.industry,'');count++;
+const login=extract('login.html','https://www.linkedin.com/checkpoint/challenge');
+assert.match(login.error,/Login/);assert.equal(login.fields.name,'');count++;
+const combined=extract('mesmo_bloco.html');
+assert.equal(combined.fields.size,'51–200 funcionários');assert.equal(combined.fields.members,'1.234');count++;
+const users=extract('usuarios_associados.html');
+assert.deepEqual(users.fields,{name:'Empresa Fictícia Usuários',members:'57.744',industry:'Teste',size:'5.001-10.000 funcionários'});count++;
+const usersCombined=extract('usuarios_mesmo_bloco.html');
+assert.equal(usersCombined.fields.members,'57.744');assert.equal(usersCombined.fields.size,'5.001-10.000 funcionários');count++;
+const usersAscii=extract('usuarios_sem_acento.html');assert.equal(usersAscii.fields.members,'1.234');count++;
+const usersHidden=extract('usuarios_ocultos.html');assert.equal(usersHidden.fields.members,'');assert.equal(usersHidden.fields.size,'5.001-10.000 funcionários');count++;
+const usersOnly=extract('usuarios_sem_faixa.html');assert.equal(usersOnly.fields.members,'57.744');assert.equal(usersOnly.fields.size,'');count++;
+console.log(`${count} cenários de extração passaram (DOM simulado).`);

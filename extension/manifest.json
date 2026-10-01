@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Pesquisa Empresas — coleta confirmada",
+  "version": "0.1.2",
+  "description": "Coleta os campos visíveis da empresa após sua confirmação e envia ao aplicativo local.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "nativeMessaging"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Confirmar empresa e coletar"
+  }
+}

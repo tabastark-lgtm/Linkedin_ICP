@@ -1,0 +1,1 @@
+{"name":"pesquisa-empresas-tests","private":true,"version":"0.1.2","scripts":{"test":"node tests/test_extract.cjs"},"devDependencies":{"linkedom":"0.18.12"}}
