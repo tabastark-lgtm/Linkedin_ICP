@@ -1,9 +1,9 @@
 # Registro das entregas no GitHub
 
-A publicação está pendente da conta correta. O usuário pediu trocar a conta; não usar automaticamente a conexão anterior.
+Código da versão 0.1.2 publicado em 01/10/2026 no repositório confirmado pelo usuário: https://github.com/tabastark-lgtm/Linkedin_ICP. Branch principal: main. Commit de publicação: 44332ad20bef29eb95c6b684cac49ee85e9b0f1e.
 
 ## Repositório
-Nome sugerido: pesquisa-empresas. Visibilidade: privado. Criar na conta que o usuário informar. Não enviar planilhas pessoais, chaves, bancos ou dados coletados.
+Repositório: tabastark-lgtm/Linkedin_ICP. Visibilidade observada: público. Publicação realizada pela integração GitHub conectada à conta tabastark-lgtm, pois o Git local não possuía credenciais HTTPS. Não enviar planilhas pessoais, chaves, bancos ou dados coletados.
 
 ## Tarefas e branches
 | Tarefa | Branch | Conferência |
@@ -16,4 +16,4 @@ Nome sugerido: pesquisa-empresas. Visibilidade: privado. Criar na conta que o us
 | 6 — Exportação | entrega-06-excel | Colunas, datas, original e arquivo bloqueado |
 | 7 — Pacote Windows | entrega-07-windows | Executável e instalação guiada |
 
-Cada PR deve explicar comportamento, testes executados e pendências. Revisar antes de integrar. Após validar o pacote, criar release v0.1.0 com ZIP e SHA-256. Não afirmar que uma validação externa ocorreu quando depende da conta ou chave do usuário.
+O histórico local das sete entregas e da correção 0.1.2 foi preservado na branch historico-local-v0.1.2. A main local acompanha a publicação no GitHub. Os 26 testes Python e 10 cenários de extração simulada passaram antes da publicação. O pacote Windows 0.1.2 e seu SHA-256 continuam na entrega local; não foi criada uma release de binários no GitHub. Não afirmar validação de coleta real que ainda depende da conta do usuário.

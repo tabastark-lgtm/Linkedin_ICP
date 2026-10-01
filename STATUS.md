@@ -54,3 +54,10 @@ Leia PRD.md e AGENTS.md. Execute testes antes de alterar. Nenhum dado real foi c
 - 26 testes Python passaram, incluindo exportação com o novo cabeçalho. Nenhum dado real foi modificado.
 - É necessário atualizar a extensão no Chrome e fazer nova coleta. Leitura da página real atualizada ainda depende da confirmação do usuário.
 - Pacote Windows v0.1.2 passou em autoteste Tk/formulário/exportação, bridge por subprocesso, novo cabeçalho Excel e igualdade do extrator empacotado com o código testado.
+
+## Publicação GitHub — 01/10/2026
+- Conta e repositório confirmados pelo usuário: tabastark-lgtm/Linkedin_ICP; branch main.
+- Publicação via integração GitHub: commit 44332ad20bef29eb95c6b684cac49ee85e9b0f1e. Árvore remota idêntica à do commit local 390fe59 (a53342fcba811f92fa5a1f3ca4a7baa45f907d5d).
+- Histórico local original preservado em historico-local-v0.1.2; main local sincronizada com origin/main.
+- 26 testes Python e 10 cenários de DOM simulado passaram antes da publicação. Arquivos pessoais, credenciais e bancos locais não foram enviados.
+- Executáveis e ZIP Windows 0.1.2 permanecem na entrega local; release de binários no GitHub não criada.

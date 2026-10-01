@@ -22,7 +22,7 @@ Gerar pacote: `python scripts/build.py`. Saída em `dist/`.
 Dados ficam em `%LOCALAPPDATA%\PesquisaEmpresas`. Para backup, feche o aplicativo e copie essa pasta. O Excel exportado não substitui o backup dos trabalhos.
 
 ## GitHub
-Publicação aguardando definição da nova conta do usuário. Não há upload de dados pessoais. Consulte `docs/GITHUB.md` para o roteiro de sete entregas.
+Código publicado em https://github.com/tabastark-lgtm/Linkedin_ICP, na branch main, em 01/10/2026. Não há upload de dados pessoais. Consulte `docs/GITHUB.md` para o registro da publicação e das sete entregas.
 
 ## Limitações
 O extrator foi projetado para rótulos português/inglês, não para todo layout possível do LinkedIn. Mudanças podem deixar campos vazios. É obrigatório revisar. O plano Tavily gratuito é sujeito às regras atuais do fornecedor. Nenhuma chave ou conta foi criada automaticamente.
