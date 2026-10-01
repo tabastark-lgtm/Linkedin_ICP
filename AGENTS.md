@@ -12,4 +12,7 @@
 - Testes: `python -m unittest discover -s tests -v`; `pnpm install --frozen-lockfile` e `pnpm test` para DOM simulado.
 - Exemplos: `python scripts/create_examples.py`. Build Windows: `python scripts/build.py` após instalar requirements-build.txt.
 - Atualizar PRD.md quando comportamento mudar e STATUS.md com evidências e pendências reais.
+- Busca persistida é candidata, nunca confirmação. Mudanças de website/consulta invalidam gerações e respostas antigas; preservar cache somente por trabalho/consulta.
+- Migração exige backup consistente anterior. Backup diário pode falhar sem bloquear salvamento, mas a falha deve ficar visível. Usar SQLite backup e fechar conexões explicitamente no Windows.
+- Excel bloqueado não impede avanço. Repetir somente bloqueios de compartilhamento, a cada 15 segundos e com dados recentes; outros erros exigem ação explícita.
 - Não declarar validação em LinkedIn real, Chrome ou Tavily sem executar esse teste. Não publicar na conta GitHub anterior; confirmar a conta de destino informada pelo usuário.

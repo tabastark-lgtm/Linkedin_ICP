@@ -7,7 +7,7 @@ Aplicativo Windows que pesquisa páginas candidatas, coleta os campos da empresa
 2. Abra **PesquisaEmpresas.exe**. Opcionalmente, dê duplo clique em **Criar atalho.vbs**.
 3. Abra **GUIA.html** e faça a configuração inicial do Tavily e da extensão.
 4. Importe `examples/01_empresas_ficticias.xlsx` para experimentar a importação. As empresas são fictícias; não devem produzir páginas reais.
-5. Após importar ou retomar, siga o painel **Próximo passo** e clique em **Iniciar pesquisa das empresas**. A importação não inicia a busca; se faltar a chave, salvar a configuração continua a busca solicitada.
+5. Ao importar e escolher a saída, a busca começa automaticamente usando a cota Tavily. Se faltar a chave, salvar a configuração continua a pesquisa. Ao retomar, candidatas ficam disponíveis sem nova consulta; use **Pesquisar pendentes**, **Refazer pesquisa** ou **Retentar falhas de pesquisa** quando necessário.
 6. Para coleta real, use uma página de empresa que você tenha confirmado no Chrome conectado.
 
 ## Desenvolvimento
@@ -32,3 +32,23 @@ Fluxo guiado com próxima ação destacada, configuração com continuação da 
 
 ## Versão 0.1.2
 Correção de coleta do rótulo português usuários associados. Atualize também a extensão no Chrome: remova a extensão antiga e carregue a pasta extension desta versão, copie o novo ID e registre-o em Configuração no aplicativo novo. Clique em Testar conexão e prepare uma nova coleta. Atualizar apenas o executável não atualiza o extrator instalado no Chrome. Os dados já salvos não são preenchidos automaticamente; revise uma nova coleta.
+
+
+## Versão 0.2.0 — automação
+- Buscas e posição persistentes; consultas iguais são reaproveitadas dentro do trabalho.
+- Alterar website ou termos invalida candidatas anteriores; respostas antigas são descartadas.
+- Concluir e próxima valida e avança pulando empresas finalizadas. Salvar e próxima permite continuar registros incompletos.
+- Excel bloqueado não impede avanço. Nova tentativa a cada 15 segundos enquanto o aplicativo estiver aberto, com os dados mais recentes.
+- Painel com andamento, situação do Excel e horário do backup. Backups locais diários antes da primeira alteração, com retenção de sete cópias.
+
+### Atualizar
+Feche a versão antiga, extraia todo o pacote v0.2.0 em uma pasta permanente e abra PesquisaEmpresas.exe. Não copie somente o executável. O banco existente é preservado e recebe backup antes da migração. Não abra a versão antiga depois de migrar.
+
+A extensão 0.1.2 continua compatível, sem mudança nas permissões ou no protocolo. Se ela já funciona, mantenha sua pasta antiga e a extensão instalada. Como o novo aplicativo está em outra pasta, copie o ID da extensão no Chrome e registre-o em **Configuração** do aplicativo novo. Clique em **Testar conexão** na extensão. Não apague a pasta da extensão enquanto ela estiver carregada no Chrome.
+
+As candidatas de sessões antigas da v0.1.2 não existiam no banco: nesses casos use Refazer pesquisa uma vez. Campos já confirmados permanecem.
+
+### Backups e recuperação
+Use **Abrir pasta de backups**. Cada ZIP contém trabalhos.sqlite, entradas/ e backup.json. A chave Tavily permanece exclusivamente no Windows. Copie backups para outro disco se desejar proteção contra falha do computador.
+
+Para recuperar no mesmo computador: feche o aplicativo e o Chrome, guarde uma cópia de toda a pasta LOCALAPPDATA/PesquisaEmpresas atual e extraia trabalhos.sqlite e entradas/ do backup para o local original indicado em backup.json. Abra a versão 0.2.0 e confira os trabalhos antes de atualizar o Excel. A restauração substitui o estado atual pelo estado do backup; não mescla trabalhos. Para restaurar em outro local, os caminhos snapshot e output no banco precisam ser ajustados; peça assistência. Não existe botão de restauração nesta versão.

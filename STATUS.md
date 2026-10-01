@@ -61,3 +61,28 @@ Leia PRD.md e AGENTS.md. Execute testes antes de alterar. Nenhum dado real foi c
 - Histórico local original preservado em historico-local-v0.1.2; main local sincronizada com origin/main.
 - 26 testes Python e 10 cenários de DOM simulado passaram antes da publicação. Arquivos pessoais, credenciais e bancos locais não foram enviados.
 - Executáveis e ZIP Windows 0.1.2 permanecem na entrega local; release de binários no GitHub não criada.
+
+
+## Automação v0.2.0 — 01/10/2026
+- Implementadas busca automática após importar, candidatas/cache persistentes por trabalho e retomada da posição. Consultas alteradas usam geração para rejeitar respostas atrasadas.
+- Implementados avanço por pendências, atualização de Excel bloqueado a cada 15 segundos, backups diários/migração com sete cópias e painel de andamento.
+- Schema user_version=2; protocolo e extensão 0.1.2 preservados. Não alteradas colunas Excel ou data de coleta.
+- Usuário informa que a versão anterior funciona bem. Nenhuma consulta Tavily ou coleta LinkedIn real foi executada nesta manutenção.
+- Não foi possível confirmar a instalação registrada: leitura de native-host.json negada mesmo após concessão de leitura; nenhum processo PesquisaEmpresas foi encontrado. Novo pacote será entregue separadamente, sem substituir a instalação nem os dados do usuário.
+- Ferramenta de controle nativo do Windows indisponível nesta sessão; conferência visual manual permanece pendente. Testes de controles Tk e de bloqueio de arquivo do Windows são registrados separadamente.
+- Publicação desta versão fica somente local conforme o plano; histórico já registra publicação anterior em tabastark-lgtm/Linkedin_ICP, mas nenhuma alteração remota nova é feita nesta entrega.
+
+- Verificação final: 40 testes Python passaram; 10 cenários de extração DOM simulado passaram. Smoke dos controles Tk passou, incluindo espaço da lista de candidatas e retomada.
+- Cobertura nova: início automático após prévia/destino, cache persistente sem nova chave/rede, posição retomada, resposta atrasada rejeitada, interrupção, navegação por pendências, migração e recuperação de backup em pasta isolada, retenção de sete cópias e falha de backup.
+- Bloqueio real de compartilhamento de arquivo Windows testado via handle, seguido de liberação e exportação automática com dados recentes. Não foi um teste manual com Microsoft Excel aberto.
+- Executável v0.2.0 passou em autoteste empacotado (Tk, formulário, SQLite, exportação e preparação de coleta). Bridge compilado passou em ping, contexto, rascunho e rejeição de repetição por subprocesso. Isso não comprova conexão em Chrome real nesta versão.
+- Novo pacote em outputs/Windows-v0.2.0/PesquisaEmpresas; ZIP e SHA256.txt no diretório superior. Extensão empacotada continua 0.1.2 e byte a byte igual à versão testada.
+- Ferramenta anterior de compilação estava inacessível; PyInstaller 6.16.0 e dependências foram instalados exclusivamente em work/build-deps-v020. Não foram alteradas políticas do Windows.
+- Três entregas registradas na branch local automacao-v0.2.0: persistência/backups, fluxo/Excel/testes, documentação/pacote. Nenhum push realizado.
+
+### Conferência manual após atualizar
+1. Fechar a versão antiga e abrir PesquisaEmpresas.exe na pasta v0.2.0; conferir os trabalhos existentes e o horário do backup.
+2. Registrar no aplicativo novo o ID da extensão já instalada e clicar em Testar conexão no Chrome.
+3. Importar uma lista pequena, observar pesquisa automática, confirmar uma candidata e revisar a coleta.
+4. Concluir e próxima, fechar/reabrir e conferir posição, candidatas e Excel.
+5. Abrir a saída no Excel, salvar outra linha no aplicativo, fechar o Excel e aguardar até 15 segundos. Conferir atualização e preservação da entrada.

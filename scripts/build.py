@@ -32,7 +32,7 @@ def main():
         shutil.copytree(ROOT / directory, package / directory, dirs_exist_ok=True)
     for name in ("GUIA.html", "README.md", "PRD.md", "STATUS.md", "Criar atalho.vbs"):
         shutil.copy2(ROOT / name, package / name)
-    shutil.make_archive(str(dist / "PesquisaEmpresas-v0.1.2-Windows"), "zip", dist, "PesquisaEmpresas")
+    shutil.make_archive(str(dist / "PesquisaEmpresas-v0.2.0-Windows"), "zip", dist, "PesquisaEmpresas")
     print("Pacote criado:", package)
 
 if __name__ == "__main__": main()
