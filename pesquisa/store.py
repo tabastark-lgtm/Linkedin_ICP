@@ -5,9 +5,10 @@ import shutil
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from pathlib import Path
-from .core import empty_record, validate_record, company_url, now, FIELDS
+from .core import empty_record, validate_record, company_url, now, FIELDS, domain
+from .backups import create_backup
 from .excel import inspect_book
 
 def data_dir():
@@ -17,13 +18,103 @@ class Store:
     def __init__(self, root=None):
         self.root = Path(root) if root else data_dir()
         self.root.mkdir(parents=True, exist_ok=True)
+        self.backup_error = ""
+        database = self.root / "trabalhos.sqlite"
+        if database.exists():
+            with closing(sqlite3.connect(database)) as connection:
+                version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version < 2:
+                # Migração só prossegue com uma cópia completa e verificável.
+                create_backup(self.root, migration=True)
         with self.db() as db:
             db.executescript('''
             CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, name TEXT, source TEXT, snapshot TEXT, sheet TEXT, output TEXT, updated TEXT, excel_pending INTEGER DEFAULT 1);
             CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY, job_id TEXT, row_num INTEGER, original TEXT, data TEXT, revision INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE IF NOT EXISTS captures(token TEXT PRIMARY KEY, record_id TEXT, revision INTEGER, expires REAL, state TEXT, payload TEXT);
+            CREATE TABLE IF NOT EXISTS searches(record_id TEXT PRIMARY KEY, query TEXT, generation INTEGER DEFAULT 0, state TEXT, candidates TEXT, searched_at TEXT, error TEXT);
+            CREATE TABLE IF NOT EXISTS search_cache(job_id TEXT, query TEXT, candidates TEXT, searched_at TEXT, PRIMARY KEY(job_id,query));
+            PRAGMA user_version=2;
             ''')
+
+    def before_change(self):
+        try:
+            create_backup(self.root)
+            self.backup_error = ""
+        except Exception as error:
+            self.backup_error = "Backup não realizado: " + str(error)
+
+    @staticmethod
+    def default_query(website):
+        try:
+            return f'site:linkedin.com/company/ "{domain(website)}"'
+        except ValueError:
+            return ""
+
+    def search_info(self, record_id):
+        with self.db() as db:
+            row = db.execute("SELECT * FROM searches WHERE record_id=?", (record_id,)).fetchone()
+        if row:
+            result = dict(row)
+            result["candidates"] = json.loads(result["candidates"])
+            return result
+        record = self.record(record_id)
+        # Versões antigas não guardavam candidatas. Exigem refazer explicitamente.
+        state = record["data"].get("search_state", "Não executada")
+        return dict(record_id=record_id, query=self.default_query(record["data"]["website"]), generation=0,
+                    state=state, candidates=[], searched_at=record["data"].get("searched_at", ""), error="")
+
+    def set_query(self, record_id, query):
+        query = query.strip()
+        info = self.search_info(record_id)
+        if info["query"] == query:
+            return
+        self.before_change()
+        with self.db() as db:
+            self._invalidate_search(db, record_id, query)
+
+    def _invalidate_search(self, db, record_id, query):
+        row = db.execute("SELECT generation FROM searches WHERE record_id=?", (record_id,)).fetchone()
+        generation = row[0] + 1 if row else 1
+        db.execute("INSERT OR REPLACE INTO searches VALUES (?,?,?,'Não executada','[]','','')", (record_id, query, generation))
+        record = self.decode(db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone())
+        data = record["data"]
+        data.update(search_state="Não executada", searched_at="")
+        db.execute("UPDATE records SET data=?,revision=revision+1 WHERE id=?", (json.dumps(data, ensure_ascii=False), record_id))
+
+    def begin_search(self, record_id):
+        self.before_change()
+        info = self.search_info(record_id)
+        generation = info["generation"] + 1
+        with self.db() as db:
+            db.execute("INSERT OR REPLACE INTO searches VALUES (?,?,?,?,?,?,?)", (record_id, info["query"], generation, info["state"], json.dumps(info["candidates"]), info["searched_at"], ""))
+        return (record_id, info["query"], generation)
+
+    def cached_search(self, job_id, query):
+        with self.db() as db:
+            row = db.execute("SELECT candidates,searched_at FROM search_cache WHERE job_id=? AND query=?", (job_id, query)).fetchone()
+        return (json.loads(row[0]), row[1]) if row else None
+
+    def finish_search(self, request, candidates, searched_at, error=""):
+        record_id, query, generation = request
+        self.before_change()
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            active = db.execute("SELECT query,generation FROM searches WHERE record_id=?", (record_id,)).fetchone()
+            if not active or tuple(active) != (query, generation):
+                return False
+            record = self.decode(db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone())
+            state = "Falha na busca" if error else ("Candidatas disponíveis" if candidates else "Sem candidatas")
+            db.execute("UPDATE searches SET state=?,candidates=?,searched_at=?,error=? WHERE record_id=?", (state, json.dumps(candidates), searched_at, error, record_id))
+            if not error:
+                db.execute("INSERT OR REPLACE INTO search_cache VALUES (?,?,?,?)", (record["job_id"], query, json.dumps(candidates), searched_at))
+            data = record["data"]
+            data.update(search_state=state, searched_at=searched_at)
+            if data["status"] in ("Pendente", "Em pesquisa", "Aguardando confirmação") and not error:
+                data["status"] = "Aguardando confirmação" if candidates else "Em pesquisa"
+            db.execute("UPDATE records SET data=?,revision=revision+1 WHERE id=?", (json.dumps(data, ensure_ascii=False), record_id))
+            db.execute("UPDATE jobs SET updated=?,excel_pending=1 WHERE id=?", (now(), record["job_id"]))
+        return True
 
     @contextmanager
     def db(self):
@@ -49,6 +140,7 @@ class Store:
         if same_path(source, output) or any(same_path(output, p) for p in self.protected_paths()):
             raise ValueError("Escolha um destino diferente de todas as entradas.")
         job_id = uuid.uuid4().hex
+        self.before_change()
         folder = self.root / "entradas"
         folder.mkdir(exist_ok=True)
         snapshot = folder / (job_id + ".xlsx")
@@ -95,6 +187,7 @@ class Store:
 
     def save(self, record_id, data, revision=None):
         validate_record(data)
+        self.before_change()
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
             old = self.decode(db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone())
@@ -102,12 +195,19 @@ class Store:
                 raise ValueError("A linha mudou. Reabra a empresa antes de salvar.")
             db.execute("UPDATE records SET data=?, revision=revision+1 WHERE id=?", (json.dumps(data, ensure_ascii=False), record_id))
             db.execute("UPDATE jobs SET updated=?, excel_pending=1 WHERE id=?", (now(), old["job_id"]))
+            if old["data"]["website"] != data["website"]:
+                self._invalidate_search(db, record_id, self.default_query(data["website"]))
 
     def output_saved(self, job_id, path):
         with self.db() as db:
             db.execute("UPDATE jobs SET output=?, excel_pending=0 WHERE id=?", (str(path), job_id))
 
+    def mark_output_pending(self, job_id):
+        with self.db() as db:
+            db.execute("UPDATE jobs SET excel_pending=1 WHERE id=?", (job_id,))
+
     def arm(self, record_id):
+        self.before_change()
         token = secrets.token_urlsafe(32)
         with self.db() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -131,6 +231,7 @@ class Store:
             return dict(token=c["token"], record_id=r["id"], job_id=r["job_id"], row_num=r["row_num"], website=r["original"], name=r["data"]["name"])
 
     def accept_capture(self, message):
+        self.before_change()
         if time.time() - (self.setting("heartbeat") or 0) > 12:
             raise ValueError("O aplicativo não está aberto.")
         url = company_url(message.get("url", ""))
