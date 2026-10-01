@@ -35,3 +35,9 @@ Concluir e próxima valida, salva e solicita exportação. Salvar e próxima per
 Testar 50/51 registros, cabeçalhos, zeros à esquerda, texto como fórmula, hash da entrada, retomada, cache sem rede, invalidar resposta atrasada, interrupção/cota, validação de conclusão, exportação bloqueada com dados recentes, restauração e retenção de backup, migração e protocolo da extensão.
 
 Validação de controles Tk e bloqueio Windows não substitui conferência visual no desktop nem teste na conta real do LinkedIn/Tavily. Gratuidade e cota dependem do fornecedor. Publicação desta entrega remota não é automática.
+
+## Entrega v0.2.0 e manutenção
+- Publicação do código e documentação autorizada pelo usuário em tabastark-lgtm/Linkedin_ICP, branch main. Preservar o histórico remoto, sem forçar atualização.
+- Evidências da versão: 40 testes Python, 10 cenários DOM simulados, smoke Tk e testes do executável/bridge empacotados. A conferência manual na conta real continua pendente e não pode ser declarada concluída.
+- Aplicativo 0.2.0, extensão compatível 0.1.2 e banco user_version=2. Atualização exige fechar a versão anterior, abrir a pasta nova e registrar o ID da extensão no novo aplicativo.
+- O pacote Windows e SHA-256 permanecem na entrega local. Publicação de código não equivale à criação de uma release com executáveis.

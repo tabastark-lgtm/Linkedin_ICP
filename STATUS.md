@@ -1,5 +1,13 @@
 # Estado da implementação
 
+## Situação atual — v0.2.0
+- Implementação e pacote Windows concluídos; 40 testes Python, 10 cenários DOM, smoke Tk e autotestes do pacote passaram na entrega anterior.
+- Usuário autorizou atualizar PRD.md, AGENTS.md e STATUS.md e publicar a versão no repositório tabastark-lgtm/Linkedin_ICP, main.
+- Publicação preparada pela integração autenticada GitHub: o transporte HTTPS do Git local está indisponível. Histórico local das entregas preservado em automacao-v0.2.0; a API pode gerar hashes de commit diferentes para a mesma árvore de arquivos.
+- A referência main só será atualizada sem force e após conferir a árvore enviada. O registro da execução e o hash confirmado serão informados ao usuário.
+- Executáveis e ZIP continuam locais; não há release de binários criada. Conferência manual em Chrome/Excel real permanece pendente.
+- As seções abaixo são o histórico das entregas; pendências antigas de publicação não representam esta autorização atual.
+
 ## Implementado
 - Importação, validação, prévia, preservação da entrada e oito exemplos fictícios.
 - Janela Windows, formulário, revisão, status, salvamento e retomada SQLite.

@@ -1,5 +1,14 @@
 # Registro das entregas no GitHub
 
+## Atualização v0.2.0
+Publicação autorizada pelo usuário em tabastark-lgtm/Linkedin_ICP, branch main, incluindo automação, testes e documentação atualizada. O Git local não disponibiliza o helper HTTPS nesta sessão; será usada a integração GitHub autenticada, sem force e com comparação da árvore final.
+
+Commits originais preservados na branch local automacao-v0.2.0. Os commits criados pela API podem ter hashes diferentes, mantendo os mesmos arquivos e a ancestralidade remota. Evidências de testes: 40 testes Python, 10 cenários DOM, smoke Tk e autotestes de executável/bridge. Não houve nova alteração de código nesta atualização documental.
+
+O pacote Windows v0.2.0 e SHA256.txt permanecem locais, fora do histórico Git. Esta publicação não cria release de binários nem envia arquivos pessoais.
+
+## Histórico v0.1.2
+
 Código da versão 0.1.2 publicado em 01/10/2026 no repositório confirmado pelo usuário: https://github.com/tabastark-lgtm/Linkedin_ICP. Branch principal: main. Commit de publicação: 44332ad20bef29eb95c6b684cac49ee85e9b0f1e.
 
 ## Repositório

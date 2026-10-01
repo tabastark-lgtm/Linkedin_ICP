@@ -15,4 +15,7 @@
 - Busca persistida é candidata, nunca confirmação. Mudanças de website/consulta invalidam gerações e respostas antigas; preservar cache somente por trabalho/consulta.
 - Migração exige backup consistente anterior. Backup diário pode falhar sem bloquear salvamento, mas a falha deve ficar visível. Usar SQLite backup e fechar conexões explicitamente no Windows.
 - Excel bloqueado não impede avanço. Repetir somente bloqueios de compartilhamento, a cada 15 segundos e com dados recentes; outros erros exigem ação explícita.
-- Não declarar validação em LinkedIn real, Chrome ou Tavily sem executar esse teste. Não publicar na conta GitHub anterior; confirmar a conta de destino informada pelo usuário.
+- Não declarar validação em LinkedIn real, Chrome ou Tavily sem executar esse teste.
+- Destino autorizado: tabastark-lgtm/Linkedin_ICP, branch principal main. Publicar somente quando solicitado pelo usuário, sem force push; conferir o estado remoto antes de atualizar a referência.
+- Conferir igualdade da árvore publicada com a versão local testada. Se a integração GitHub gerar hashes de commit diferentes, preservar os commits locais e registrar essa diferença; não afirmar que o transporte Git funcionou quando a publicação ocorreu pela API.
+- Manter pacote Windows e checksum separados do código-fonte. Não versionar bancos, backups, chaves, planilhas reais ou exportações; somente exemplos fictícios.
