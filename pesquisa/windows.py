@@ -54,6 +54,22 @@ def install_bridge(extension_id, root):
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Software\\Google\\Chrome\\NativeMessagingHosts\\" + HOST) as key:
         winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(manifest))
 
+def file_locked(path):
+    """Distingue bloqueio de compartilhamento de falta de permissão no destino."""
+    if os.name != "nt" or not Path(path).exists():
+        return False
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    # Solicita somente um handle com permissão de substituição; não altera o arquivo.
+    handle = kernel.CreateFileW(str(path), 0x10000, 7, None, 3, 0, None)
+    if handle == ctypes.c_void_p(-1).value:
+        return ctypes.get_last_error() in (32, 33)
+    kernel.CloseHandle(handle)
+    return False
+
+
 def open_chrome(url):
     import subprocess
     candidates = [Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Google/Chrome/Application/chrome.exe", Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)")) / "Google/Chrome/Application/chrome.exe", Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe"]

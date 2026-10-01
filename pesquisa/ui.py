@@ -13,15 +13,17 @@ from .store import Store
 from .excel import inspect_book, write_output
 from .search import search, SearchError
 from .workflow import next_step
-from .windows import read_key, save_key, install_bridge, open_chrome
+from .windows import read_key, save_key, install_bridge, open_chrome, file_locked
+from .backups import last_backup
 
 class App(tk.Tk):
     def __init__(self, store=None):
         super().__init__()
-        self.title("Pesquisa Empresas — v0.1.2")
+        self.title("Pesquisa Empresas — v0.2.0")
         self.geometry("1190x820")
         self.minsize(1000, 720)
         self.store = store or Store()
+        self.store.before_change()
         self.store.setting("heartbeat", time.time())
         self.current = None
         self.job_id = None
@@ -36,6 +38,9 @@ class App(tk.Tk):
         self.armed_record = None
         self.armed_until = 0
         self.search_failure = ""
+        self.export_retries = {}
+        self.export_errors = {}
+        self.last_backup_warning = ""
         self.protocol("WM_DELETE_WINDOW", self.close)
         style = ttk.Style(self)
         style.theme_use("clam")
@@ -66,7 +71,7 @@ class App(tk.Tk):
         self.clear()
         self.header("Pesquisa Empresas", "Pesquise páginas, confirme a empresa e leve os dados para o Excel.")
         bar = ttk.Frame(self.container); bar.pack(fill="x", pady=(0, 18))
-        for label, cmd in [("Importar Excel", self.import_dialog), ("Configuração", self.config), ("Abrir guia", self.guide)]:
+        for label, cmd in [("Importar Excel", self.import_dialog), ("Configuração", self.config), ("Abrir guia", self.guide), ("Abrir pasta de backups", self.open_backups)]:
             ttk.Button(bar, text=label, command=cmd).pack(side="left", padx=(0, 8))
         ttk.Label(self.container, text="Seus trabalhos", font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=8)
         tree = ttk.Treeview(self.container, columns=("file", "sheet", "progress", "updated"), show="headings")
@@ -118,13 +123,16 @@ class App(tk.Tk):
         ttk.Button(buttons, text="Abrir guia ilustrado", command=self.guide).pack(side="left", padx=8)
 
     def import_dialog(self):
+        if self.searching:
+            messagebox.showinfo("Pesquisa em andamento", "Interrompa a pesquisa e aguarde a consulta atual terminar antes de importar outro trabalho.")
+            return
         path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
         if not path: return
         try: sheets = inspect_book(path)
         except Exception as e: messagebox.showerror("Importação", str(e)); return
         win = tk.Toplevel(self); win.title("Conferir a lista"); win.geometry("950x570")
         frame = ttk.Frame(win, padding=18); frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Escolha a aba e confira todas as colunas antes de importar.").pack(anchor="w")
+        ttk.Label(frame, text="Confira a aba. Ao iniciar, pesquisaremos websites válidos usando sua cota Tavily.\nVocê poderá interromper a pesquisa.").pack(anchor="w")
         selected = tk.StringVar(value=sheets[0])
         combo = ttk.Combobox(frame, textvariable=selected, values=sheets, state="readonly"); combo.pack(anchor="w", pady=10)
         tree = ttk.Treeview(frame, show="headings"); tree.pack(fill="both", expand=True)
@@ -157,7 +165,7 @@ class App(tk.Tk):
             if not output: return
             try:
                 job = self.store.import_job(path, selected.get(), output)
-                win.destroy(); self.open_job(job); self.export()
+                win.destroy(); self.open_job(job); self.search_batch()
             except Exception as e: messagebox.showerror("Importação", str(e), parent=self)
         ttk.Button(frame, text="Escolher Excel de saída e iniciar", command=start).pack(anchor="e", pady=8)
         preview()
@@ -171,11 +179,13 @@ class App(tk.Tk):
         job = self.store.job(job_id)
         self.header(job["name"], "Importar → pesquisar → confirmar e coletar no Chrome → revisar → salvar Excel")
         bar = ttk.Frame(self.container); bar.pack(fill="x", pady=(0, 10))
-        for i, (label, cmd) in enumerate([("Seus trabalhos", self.home), ("Pesquisar empresas", self.search_batch), ("Interromper", self.stop_search), ("Configuração", self.config), ("Atualizar Excel agora", self.export), ("Exportar como", lambda:self.export(True))]):
+        for i, (label, cmd) in enumerate([("Seus trabalhos", self.home), ("Pesquisar pendentes", self.search_batch), ("Interromper", self.stop_search), ("Configuração", self.config), ("Atualizar Excel agora", self.export), ("Exportar como", lambda:self.export(True)), ("Retentar falhas de pesquisa", self.retry_searches), ("Abrir pasta de backups", self.open_backups)]):
             ttk.Button(bar, text=label, command=cmd).grid(row=i//3, column=i%3, sticky="ew", padx=(0, 5), pady=2)
         self.progress = tk.StringVar(value="Planilha carregada. Siga o Próximo passo abaixo para começar.")
         progress_label = ttk.Label(self.container, textvariable=self.progress, foreground="#45617a", wraplength=1050)
         progress_label.pack(anchor="w", pady=4)
+        self.dashboard = tk.StringVar()
+        ttk.Label(self.container, textvariable=self.dashboard, wraplength=1050).pack(anchor="w", pady=4)
         self.container.bind("<Configure>", lambda e: progress_label.configure(wraplength=max(200, e.width - 20)))
         guidance = ttk.LabelFrame(self.container, text="Próximo passo", padding=12)
         guidance.pack(fill="x", pady=(6, 10))
@@ -227,8 +237,9 @@ class App(tk.Tk):
         self.statusvar = tk.StringVar(); statusbox = ttk.Combobox(statebar, textvariable=self.statusvar, values=STATUSES, state="readonly", width=24); statusbox.pack(side="left"); statusbox.bind("<<ComboboxSelected>>", lambda e:self.changed("status"))
         ttk.Button(statebar, text="Concluir", command=self.complete).pack(side="left", padx=8)
         querybar = ttk.Frame(right); querybar.pack(fill="x", pady=4)
-        self.queryvar = tk.StringVar(); ttk.Entry(querybar, textvariable=self.queryvar).pack(side="left", fill="x", expand=True)
-        ttk.Button(querybar, text="Pesquisar esta empresa", command=self.search_one).pack(side="left", padx=5)
+        self.queryvar = tk.StringVar(); self.queryvar.trace_add("write", lambda *a:self.changed("query"))
+        ttk.Entry(querybar, textvariable=self.queryvar).pack(side="left", fill="x", expand=True)
+        ttk.Button(querybar, text="Refazer pesquisa", command=self.search_one).pack(side="left", padx=5)
         self.candidates = tk.Listbox(right, height=5, font=("Segoe UI", 10)); self.candidates.pack(fill="x")
         self.candidates.bind("<Double-1>", lambda e:self.open_candidate())
         self.snippet = tk.StringVar()
@@ -238,11 +249,17 @@ class App(tk.Tk):
         footer = ttk.Frame(right); footer.pack(fill="x", pady=(8, 0))
         ttk.Button(footer, text="Anterior", command=lambda:self.navigate(-1)).pack(side="left")
         ttk.Button(footer, text="Salvar e próxima", command=self.save_next).pack(side="right")
+        ttk.Button(footer, text="Concluir e próxima", command=self.complete_next).pack(side="right", padx=5)
         self.savedvar = tk.StringVar(); ttk.Label(self.container, textvariable=self.savedvar).pack(anchor="w", pady=(12, 0))
         self.refresh_list()
         records = self.store.records(job_id)
+        self.results = {r["id"]: self.store.search_info(r["id"])["candidates"] for r in records if self.store.search_info(r["id"])["candidates"]}
         active = next((r for r in records if r["data"]["status"] != "Concluída"), records[0])
+        previous = self.store.setting("position:" + job_id)
+        active = next((r for r in records if r["id"] == previous), active)
         self.load_record(active["id"])
+        if job["excel_pending"]: self.export(quiet=True)
+        self.update_dashboard()
 
     def refresh_list(self):
         if not self.job_id: return
@@ -262,6 +279,8 @@ class App(tk.Tk):
     def load_record(self, record_id):
         self.store.cancel_capture()
         self.current = self.store.record(record_id)
+        self.store.before_change()
+        self.store.setting("position:" + self.job_id, record_id)
         self.loading = True
         d = self.current["data"]
         for k, v in self.vars.items(): v.set(d[k])
@@ -279,6 +298,7 @@ class App(tk.Tk):
                 except ValueError: pass
             self.queryvar.set(f'site:linkedin.com/company/ "{current_domain}"')
         except ValueError: self.queryvar.set("")
+        self.queryvar.set(self.store.search_info(record_id)["query"])
         self.originalvar.set(f"Empresa {index+1} de {len(rows)} · Linha {self.current['row_num']} · Original: {self.current['original'] or '(vazio)'}" + ("\nWebsite repetido nas linhas: " + ", ".join(duplicate) if duplicate else ""))
         self.confirmvar.set(("Página confirmada" if d["confirmed"] else "Página ainda não confirmada") + (" · Consulta: " + d["consulted_at"].replace("T", " ")[:19] if d["consulted_at"] else ""))
         self.loading = False; self.dirty = False
@@ -296,6 +316,18 @@ class App(tk.Tk):
     def changed(self, key):
         if self.loading or not self.current: return
         self.dirty = True
+        if key in ("website", "query"):
+            if key == "website":
+                self.loading = True
+                self.queryvar.set(self.store.default_query(self.vars["website"].get()))
+                self.loading = False
+            # Invalida imediatamente, inclusive antes do salvamento com atraso.
+            self.store.set_query(self.current["id"], self.queryvar.get())
+            latest = self.store.record(self.current["id"])
+            self.current["revision"] = latest["revision"]
+            self.current["data"].update(search_state="Não executada", searched_at="")
+            self.results.pop(self.current["id"], None)
+            self.show_candidates()
         if key == "url":
             self.current["data"]["confirmed"] = False
             self.confirmvar.set("URL alterada: confirme novamente antes de concluir.")
@@ -318,6 +350,7 @@ class App(tk.Tk):
             except ValueError: pass
         try:
             self.store.save(self.current["id"], d, self.current["revision"])
+            self.store.set_query(self.current["id"], self.queryvar.get())
             self.current = self.store.record(self.current["id"])
             self.dirty = False
             self.statusvar.set(d["status"])
@@ -384,8 +417,8 @@ class App(tk.Tk):
             state = self.current["data"]["search_state"]
             messages = {"Sem candidatas": "Busca concluída sem candidatas. Ajuste a consulta e tente novamente.",
                         "Falha na busca": "Falha na busca. Confira a conexão e a configuração; tente novamente.",
-                        "Candidatas disponíveis": "Resultados da sessão anterior: pesquise novamente para exibir a lista."}
-            self.candidates.insert("end", messages.get(state, "Pesquisa ainda não iniciada nesta sessão. Use o Próximo passo acima."))
+                        "Candidatas disponíveis": "Resultados da versão anterior não armazenados. Clique em Refazer pesquisa."}
+            self.candidates.insert("end", messages.get(state, "Pesquisa ainda não iniciada. Use o Próximo passo acima."))
         self.update_step()
 
     def show_snippet(self, _=None):
@@ -407,47 +440,62 @@ class App(tk.Tk):
 
     def search_batch(self):
         if not self.save(): return
-        rows = [r for r in self.store.records(self.job_id) if r["data"]["search_state"] == "Não executada" or (r["data"]["status"] not in ("Concluída", "Não encontrada") and r["id"] not in self.results)]
+        rows = [r for r in self.store.records(self.job_id) if self.store.search_info(r["id"])["state"] == "Não executada" and r["data"]["status"] not in ("Concluída", "Não encontrada")]
         self.start_search(rows)
 
-    def search_one(self):
-        if self.current and self.save(): self.start_search([self.current], self.queryvar.get().strip())
+    def retry_searches(self):
+        if not self.save(): return
+        self.start_search([r for r in self.store.records(self.job_id) if self.store.search_info(r["id"])["state"] == "Falha na busca" and r["data"]["status"] not in ("Concluída", "Não encontrada")], force=True)
 
-    def start_search(self, records, override=None):
+    def search_one(self):
+        if self.current and self.save(): self.start_search([self.current], self.queryvar.get().strip(), force=True)
+
+    def start_search(self, records, override=None, force=False):
         if self.searching: messagebox.showinfo("Pesquisa", "Há uma pesquisa em andamento."); return
         jobs = []
         for r in records:
             try: d = domain(r["data"]["website"])
             except ValueError: continue
-            jobs.append((r["id"], override or f'site:linkedin.com/company/ "{d}"'))
+            query = override or self.store.search_info(r["id"])["query"] or self.store.default_query(d)
+            jobs.append((r["id"], query))
         if not jobs: messagebox.showinfo("Pesquisa", "Não há websites válidos para pesquisar."); return
-        try: key = read_key()
+        needs_key = force or any(self.store.cached_search(self.job_id, query) is None for _, query in jobs)
+        try: key = read_key() if needs_key else "cached"
         except Exception as e: messagebox.showerror("Chave", str(e)); return
         if not key:
             job_id = self.job_id
             ids = [r["id"] for r in records]
             def resume_search():
                 if self.job_id == job_id and self.save():
-                    self.start_search([self.store.record(rid) for rid in ids], override)
+                    self.start_search([self.store.record(rid) for rid in ids], override, force)
             self.progress.set("Para pesquisar, configure a chave Tavily. Ao salvar, a pesquisa será iniciada.")
             self.config(on_key_saved=resume_search); return
         self.searching = True; self.stop.clear(); self.search_failure = ""
-        self.progress.set(f"Pesquisando 1 de {len(jobs)} empresas… Aguarde a resposta do serviço.")
+        job_id = self.job_id
+        requests = []
+        for rid, query in jobs:
+            self.store.set_query(rid, query)
+            requests.append(self.store.begin_search(rid))
+        self.progress.set(f"Pesquisando 1 de {len(jobs)} empresas… Consultas novas usam a cota Tavily.")
         self.update_step()
         def worker():
             cache = {}
-            for i, (rid, query) in enumerate(jobs, 1):
+            for i, request in enumerate(requests, 1):
                 if self.stop.is_set(): break
+                rid, query, generation = request
                 try:
                     if query not in cache:
-                        self.store.setting("search_count", (self.store.setting("search_count") or 0) + 1)
-                        cache[query] = search(key, query)
-                    self.events.put(("search", rid, cache[query], f"Pesquisa {i} de {len(jobs)}"))
+                        cached = None if force else self.store.cached_search(job_id, query)
+                        if cached is None:
+                            self.store.setting("search_count", (self.store.setting("search_count") or 0) + 1)
+                            cached = (search(key, query), now())
+                        cache[query] = cached
+                    self.events.put(("search", rid, cache[query][0], f"Pesquisa {i} de {len(jobs)}", request, cache[query][1]))
                 except SearchError as e:
-                    self.events.put(("search_error", rid, str(e))); break
+                    self.events.put(("search_error", rid, str(e), "", request, now())); break
                 except Exception:
-                    self.events.put(("search_error", rid, "Erro local ao executar a pesquisa.")); break
-            self.events.put(("done", len(jobs)))
+                    self.events.put(("search_error", rid, "Erro local ao executar a pesquisa.", "", request, now())); break
+            self.events.put(("done", job_id))
         threading.Thread(target=worker, daemon=True).start()
 
     def stop_search(self):
@@ -469,31 +517,84 @@ class App(tk.Tk):
         self.load_record(records[max(0, min(len(records)-1, index+offset))]["id"])
 
     def save_next(self):
-        if not self.save() or not self.export(): return
+        if not self.save(): return
+        self.export()
         records = self.store.records(self.job_id)
         index = next(i for i, r in enumerate(records) if r["id"] == self.current["id"])
-        if index + 1 < len(records): self.navigate(1)
-        else:
-            pending = next((r for r in records if r["data"]["status"] not in ("Concluída", "Não encontrada")), None)
-            if pending and pending["id"] != self.current["id"]: self.load_record(pending["id"])
-            self.progress.set("Excel atualizado. " + ("Ainda há empresas para revisar." if pending else "Você chegou ao fim da lista."))
+        ordered = records[index+1:] + records[:index]
+        pending = next((r for r in ordered if r["data"]["status"] not in ("Concluída", "Não encontrada")), None)
+        if pending: self.load_record(pending["id"])
+        remaining = [r for r in records if r["data"]["status"] not in ("Concluída", "Não encontrada")]
+        problems = ("Em dúvida", "Acesso indisponível", "Website ausente", "Website inválido", "Coleta incompleta", "Aguardando revisão")
+        if not remaining:
+            self.progress.set("Lista finalizada. Confira a situação do Excel abaixo.")
+        elif all(r["data"]["status"] in problems or r["data"]["search_state"] in ("Sem candidatas", "Falha na busca") for r in remaining):
+            self.progress.set(f"Restam {len(remaining)} empresas com dados incompletos, dúvidas ou problemas. Use o filtro de status para revisar.")
+        elif not pending:
+            self.progress.set("Esta é a única empresa restante. Revise os campos ou registre o motivo da pendência.")
+        self.update_dashboard()
 
-    def export(self, choose=False):
+    def export(self, choose=False, quiet=False):
         if not self.job_id or not self.save(): return False
         job = self.store.job(self.job_id); target = job["output"]
         if choose:
             target = filedialog.asksaveasfilename(initialfile=Path(target).name, defaultextension=".xlsx", filetypes=[("Excel", "*.xlsx")])
             if not target: return False
+        return self.export_job(job["id"], target, quiet)
+
+    def export_job(self, job_id, target=None, quiet=False):
+        job = self.store.job(job_id)
+        target = target or job["output"]
         try:
-            write_output(job, self.store.records(self.job_id), target, self.store.protected_paths())
-            self.store.output_saved(self.job_id, target)
-            self.savedvar.set("Salvo · Excel atualizado: " + target)
-            self.update_step()
+            write_output(job, self.store.records(job_id), target, self.store.protected_paths())
+            self.store.output_saved(job_id, target)
+            self.export_retries.pop(job_id, None); self.export_errors.pop(job_id, None)
+            if self.job_id == job_id:
+                self.savedvar.set("Salvo · Excel atualizado: " + target)
+                self.update_step()
+                self.update_dashboard()
             return True
         except Exception as e:
-            self.savedvar.set("Salvo localmente · Excel aguardando atualização")
-            messagebox.showerror("Excel aguardando atualização", "Se o arquivo estiver aberto no Excel, feche-o e tente novamente.\nSeu preenchimento continua salvo no aplicativo.\n\n" + str(e))
+            self.store.mark_output_pending(job_id)
+            # Sharing violation (32/33) identifica arquivo aberto; outras falhas exigem ação.
+            locked = isinstance(e, PermissionError) and (getattr(e, "winerror", None) in (32, 33) or file_locked(target))
+            if locked:
+                self.export_retries[job_id] = (time.monotonic() + 15, target)
+                self.export_errors[job_id] = "Arquivo aberto: feche o Excel. Nova tentativa automática em 15 segundos."
+            else:
+                self.export_retries.pop(job_id, None)
+                self.export_errors[job_id] = str(e) + " · Use Atualizar Excel agora ou Exportar como."
+                if not quiet:
+                    messagebox.showerror("Excel aguardando atualização", "Os dados estão salvos no aplicativo.\nUse Atualizar Excel agora para tentar novamente ou Exportar como.\n\n" + str(e))
+            if self.job_id == job_id:
+                self.savedvar.set("Salvo no aplicativo · Excel aguardando atualização")
+                self.update_dashboard()
             return False
+
+    def retry_exports(self):
+        for job_id, (deadline, target) in list(self.export_retries.items()):
+            if time.monotonic() < deadline: continue
+            if self.job_id == job_id and not self.save(quiet=True): continue
+            self.export_job(job_id, target, quiet=True)
+
+    def open_backups(self):
+        folder = self.store.root / "backups"
+        folder.mkdir(exist_ok=True)
+        os.startfile(folder)
+
+    def update_dashboard(self):
+        if not self.job_id: return
+        records = self.store.records(self.job_id)
+        completed = sum(r["data"]["status"] == "Concluída" for r in records)
+        missing = sum(r["data"]["status"] == "Não encontrada" for r in records)
+        doubts = sum(r["data"]["status"] == "Em dúvida" for r in records)
+        failures = sum(r["data"]["search_state"] == "Falha na busca" for r in records)
+        invalid = sum(not self.store.default_query(r["data"]["website"]) for r in records)
+        partial = sum(r["data"]["status"] == "Coleta incompleta" for r in records)
+        excel = "Aguardando atualização" if self.store.job(self.job_id)["excel_pending"] else "Atualizado"
+        self.dashboard.set(f"Total: {len(records)} · Concluídas: {completed} · Não encontradas: {missing} · Restantes: {len(records)-completed-missing}\n"
+                           f"Dúvidas: {doubts} · Falhas de pesquisa: {failures} · Websites ausentes/inválidos: {invalid} · Coletas incompletas: {partial}\n"
+                           f"Excel: {excel} · Último backup: {last_backup(self.store.root)}\n" + " · ".join(filter(None, [self.store.backup_error, self.export_errors.get(self.job_id, "")])))
 
     def review_capture(self, capture):
         self.reviews_open.add(capture["token"])
@@ -537,33 +638,37 @@ class App(tk.Tk):
                 event = self.events.get_nowait()
                 if event[0] == "done":
                     self.searching = False
-                    if self.job_id:
+                    if self.job_id == event[1]:
                         self.progress.set(self.search_failure or ("Pesquisa interrompida por você. Os resultados recebidos foram preservados." if self.stop.is_set() else "Pesquisa encerrada. Selecione uma empresa e siga o Próximo passo para abrir uma candidata."))
                         self.update_step()
                     continue
                 rid = event[1]
                 if self.current and self.current["id"] == rid and not self.save(quiet=True):
                     self.events.put(event); break
-                r = self.store.record(rid); d = r["data"]
+                r = self.store.record(rid)
+                failure = event[2] if event[0] == "search_error" else ""
+                if not self.store.finish_search(event[4], event[2] if not failure else [], event[5], failure):
+                    continue
                 if event[0] == "search":
                     self.results[rid] = event[2]
-                    d["search_state"] = "Candidatas disponíveis" if event[2] else "Sem candidatas"
-                    d["searched_at"] = now()
-                    if d["status"] in ("Pendente", "Em pesquisa", "Aguardando confirmação"):
-                        d["status"] = "Aguardando confirmação" if event[2] else "Em pesquisa"
                 else:
                     self.results.pop(rid, None)
-                    d["search_state"] = "Falha na busca"
                     self.search_failure = "Pesquisa interrompida: " + event[2]
-                    if self.job_id: self.progress.set(self.search_failure)
+                    if self.job_id == r["job_id"]: self.progress.set(self.search_failure)
                     messagebox.showerror("Pesquisa interrompida", event[2])
-                self.store.save(rid, d, r["revision"])
+                d = self.store.record(rid)["data"]
                 if self.current and self.current["id"] == rid:
                     self.current = self.store.record(rid); self.statusvar.set(d["status"]); self.show_candidates()
                 if self.job_id == r["job_id"]:
                     if self.tree.exists(rid): self.tree.set(rid, "status", d["status"])
                     if event[0] == "search": self.progress.set(event[3] + f" · {len(event[2])} candidata(s) para a linha {r['row_num']}.")
-            if self.job_id: self.update_step()
+            self.retry_exports()
+            if self.job_id:
+                self.update_step()
+                self.update_dashboard()
+            if self.store.backup_error and self.last_backup_warning != self.store.backup_error:
+                self.last_backup_warning = self.store.backup_error
+                messagebox.showwarning("Cópia de segurança", self.store.backup_error)
             for capture in self.store.pending_captures():
                 if capture["token"] not in self.reviews_open: self.review_capture(capture)
         except Exception as e:

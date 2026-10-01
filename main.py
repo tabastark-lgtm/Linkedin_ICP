@@ -21,7 +21,11 @@ def main():
         ctypes.windll.user32.MessageBoxW(None, "O aplicativo já está aberto. Procure a janela Pesquisa Empresas.", "Pesquisa Empresas", 0)
         return
     from pesquisa.ui import App
-    app = App()
+    try:
+        app = App()
+    except Exception as error:
+        ctypes.windll.user32.MessageBoxW(None, "Não foi possível abrir o aplicativo. Seus trabalhos não foram apagados.\n\n" + str(error), "Pesquisa Empresas", 16)
+        return
     app.mainloop()
     if handle:
         kernel.CloseHandle.argtypes = [ctypes.c_void_p]

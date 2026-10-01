@@ -132,7 +132,7 @@ class GuidedUITests(unittest.TestCase):
         self.assertEqual(self.app.current["data"]["status"], "Coleta incompleta")
         self.error.assert_called()
 
-    def test_completion_exports_and_advances_and_export_failure_stays(self):
+    def test_completion_exports_and_advances_even_when_export_fails(self):
         rid = self.app.current["id"]
         self.app.vars["url"].set(CANDIDATE["url"])
         self.app.current["data"]["confirmed"] = True
@@ -145,7 +145,7 @@ class GuidedUITests(unittest.TestCase):
         rid = self.app.current["id"]
         with patch("pesquisa.ui.write_output", side_effect=PermissionError("Excel aberto")):
             self.app.save_next()
-        self.assertEqual(self.app.current["id"], rid)
+        self.assertNotEqual(self.app.current["id"], rid)
         self.assertTrue(self.store.job(self.job)["excel_pending"] or self.error.called)
 
 class GuidedStateTests(unittest.TestCase):
